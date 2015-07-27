@@ -8,186 +8,91 @@
 
 import UIKit
 
-class ViewController: UIViewController {
-
+class ViewController: UIViewController
+{
+    let mainGroup = UIStackView()
+    
+    let stepper = UIStepper()
+    let slider = UISlider()
+    let resetButton = UIButton()
+    let label = UILabel()
+    
+    let dispatchingValue = DispatchingValue(25)
+    
     override func viewDidLoad()
     {
         super.viewDidLoad()
         
-        var testFoo: TestFoo? = TestFoo()
+        // set up user interface...
         
-        let stringChangeHandler = EventHandler(function: {
+        view.addSubview(mainGroup)
+        
+        mainGroup.axis = UILayoutConstraintAxis.Vertical
+        mainGroup.distribution = UIStackViewDistribution.EqualSpacing
+        
+        mainGroup.addArrangedSubview(label)
+        mainGroup.addArrangedSubview(stepper)
+        mainGroup.addArrangedSubview(slider)
+        mainGroup.addArrangedSubview(resetButton)
+        
+        // dispatchingValue...
+        
+        let dispatchingValueChangeHandler = EventHandler(function: {
             (event: Event) in
-            print("hello from string change handler! \((event.target as! DispatchingString).string)")
+            self.label.text = "\(self.dispatchingValue.value)"
+            self.slider.value = Float(self.dispatchingValue.value)
+            self.stepper.value = Double(self.dispatchingValue.value)
+            })
+        
+        dispatchingValue.addEventListener(.change, handler: dispatchingValueChangeHandler)
+        
+        // reset button...
+        
+        resetButton.setTitle("Reset to Zero", forState: UIControlState.Normal)
+        resetButton.setTitleColor(UIColor.blueColor(), forState: UIControlState.Normal)
+
+        let buttonTapHandler = EventHandler(function: {
+            (event: Event) in
+            self.dispatchingValue.value = 0
         })
         
-        let testFooEventHandler = EventHandler(function: testFoo!.stringChangeHandler)
+        resetButton.addEventListener(.tap, handler: buttonTapHandler)
         
-        let string = DispatchingString()
-        string.addEventListener(.change, handler: stringChangeHandler)
-        string.addEventListener(.change, handler: testFooEventHandler)
+        // stepper...
         
-        string.string = "Simon"
+        stepper.minimumValue = 0
+        stepper.maximumValue = 50
+        stepper.value = Double(dispatchingValue.value)
         
-        testFoo = nil
+        let stepperChangeHandler = EventHandler(function: {
+            (event: Event) in
+            self.dispatchingValue.value = Int(self.stepper.value)
+        })
         
-        string.string = "Simon Gladman"
-
+        stepper.addEventListener(.change, handler: stepperChangeHandler)
         
-        string.removeEventListener(.change, handler: stringChangeHandler)
-
+        // slider...
         
-        string.string = "Simon XXX"
+        slider.minimumValue = 0
+        slider.maximumValue = 50
+        slider.value = Float(dispatchingValue.value)
         
-                string.removeEventListener(.change, handler: testFooEventHandler)
+        let sliderChangeHandler = EventHandler(function: {
+            (event: Event) in
+            self.dispatchingValue.value = Int(self.slider.value)
+        })
         
-        string.string = "Simon YYY"
+        slider.addEventListener(.change, handler: sliderChangeHandler)
         
-    }
-
-
-
-}
-
-// -------
-
-class TestFoo
-{
-    func stringChangeHandler(event: Event)
-    {
-        print("test foo! string change handler! \((event.target as! DispatchingString).string)")
+        // label...
+        
+        label.text = "\(dispatchingValue.value)"
     }
     
-    deinit
+    override func viewDidLayoutSubviews()
     {
-        print ("test foo deinit")
-    }
-}
-
-// -------
-
-class DispatchingString: EventDispatcher
-{
-    var string: String = ""
-    {
-        didSet
-        {
-            dispatchEvent(Event(type: EventType.change, target: self))
-        }
-    }
-}
-
-// -------
-
-protocol EventDispatcher: class
-{
-    func addEventListener(type: EventType, handler: EventHandler)
-    
-    func removeEventListener(type: EventType, handler: EventHandler)
-    
-    func dispatchEvent(event: Event)
-}
-
-extension EventDispatcher
-{
-    func addEventListener(type: EventType, handler: EventHandler)
-    {
-        var eventListeners: EventListeners
-        
-        if let el = objc_getAssociatedObject(self, &EventDispatcherKey.eventDispatcher) as? EventListeners
-        {
-            eventListeners = el
-            
-            if let _ = eventListeners.listeners[type]
-            {
-                eventListeners.listeners[type]?.insert(handler)
-            }
-            else
-            {
-                eventListeners.listeners[type] = Set<EventHandler>([handler])
-            }
-        }
-        else
-        {
-            eventListeners = EventListeners()
-            eventListeners.listeners[type] = Set<EventHandler>([handler])
-        }
-        
-        objc_setAssociatedObject(self,
-            &EventDispatcherKey.eventDispatcher,
-            eventListeners,
-            objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN)
-    }
-    
-    func removeEventListener(type: EventType, handler: EventHandler)
-    {
-        guard let eventListeners = objc_getAssociatedObject(self, &EventDispatcherKey.eventDispatcher) as? EventListeners,
-            _ = eventListeners.listeners[type]
-            else
-        {
-            // no handler for this object / event type
-            return
-        }
-        
-        eventListeners.listeners[type]?.remove(handler)
-
-        objc_setAssociatedObject(self,
-            &EventDispatcherKey.eventDispatcher,
-            eventListeners,
-            objc_AssociationPolicy.OBJC_ASSOCIATION_RETAIN)
-    }
-    
-    func dispatchEvent(event: Event)
-    {
-        guard let eventListeners = objc_getAssociatedObject(self, &EventDispatcherKey.eventDispatcher) as? EventListeners,
-            handlers = eventListeners.listeners[event.type]
-            else
-        {
-            // no handler for this object / event type
-            return
-        }
-        
-        for handler in handlers
-        {
-            handler.function(event)
-        }
+        mainGroup.frame = view.frame.rectByInsetting(dx: 50, dy: 50)
     }
 
 }
 
-struct EventDispatcherKey
-{
-    static var eventDispatcher = "eventDispatcher"
-}
-
-struct EventHandler: Hashable
-{
-    let function: Event -> Void
-    let id = NSUUID()
-    
-    var hashValue: Int
-    {
-        return id.hashValue
-    }
-}
-
-func == (lhs: EventHandler, rhs: EventHandler) -> Bool
-{
-    return lhs.id == rhs.id
-}
-
-class EventListeners
-{
-    var listeners: [EventType: Set<EventHandler>] = [:]
-}
-
-struct Event
-{
-    let type: EventType
-    let target: EventDispatcher
-}
-
-enum EventType: String
-{
-    case change
-}
